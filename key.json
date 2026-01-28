@@ -1,4 +1,7 @@
 {
-  "key": "MURAD-SK-MU-DEL"
-  "key": "MURAD-561X--USE"
+  "keys": [
+    "MURAD-SK-MU-DEL",
+    "MURAD-561X--USE",
+    "MURAD-আরেকটি_আইডি"
+  ]
 }
