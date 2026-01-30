@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub JSON Auto-Save</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f4; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #status { margin-top: 15px; font-size: 14px; color: #555; }
+        pre { text-align: left; background: #222; color: #0f0; padding: 10px; border-radius: 8px; margin-top: 20px; font-size: 12px; max-height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3>GitHub Key Manager</h3>
+    <input type="text" id="keyInput" placeholder="Enter key and press Enter...">
+    <button class="btn" onclick="saveToGithub()">Save Key</button>
+    <div id="status">Status: Waiting...</div>
+    <pre id="display">{ "keys": [] }</pre>
+</div>
+
+<script>
+    // আপনার তথ্য এখানে দিন
+    const GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN'; // আপনার টোকেন এখানে দিন
+    const REPO_OWNER = 'YOUR_USERNAME';       // আপনার গিটহাব ইউজারনেম
+    const REPO_NAME = 'YOUR_REPO_NAME';       // আপনার রিপোজিটরি নাম
+    const FILE_PATH = 'Key.json';             // ফাইলটির নাম
+
+    async function saveToGithub() {
+        const input = document.getElementById('keyInput');
+        const status = document.getElementById('status');
+        const display = document.getElementById('display');
+        const newKey = input.value.trim();
+
+        if (!newKey) return alert("Please enter a key");
+
+        status.innerText = "Saving to GitHub...";
+
+        try {
+            // ১. বর্তমান ফাইলটি গেট করা (SHA আইডি পাওয়ার জন্য)
+            const getFileRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+
+            let sha = "";
+            let currentKeys = [];
+
+            if (getFileRes.ok) {
+                const fileData = await getFileRes.json();
+                sha = fileData.sha;
+                const content = JSON.parse(atob(fileData.content));
+                currentKeys = content.keys || [];
+            }
+
+            // ২. নতুন ডাটা যোগ করা
+            currentKeys.push(newKey);
+            const updatedContent = JSON.stringify({ keys: currentKeys }, null, 2);
+            display.textContent = updatedContent;
+
+            // ৩. ফাইলটি গিটহাবে পুশ/আপডেট করা
+            const updateRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: "Update Key.json via Web UI",
+                    content: btoa(updatedContent), // বেস৬৪ এনকোডিং
+                    sha: sha
+                })
+            });
+
+            if (updateRes.ok) {
+                status.innerText = "Successfully saved to GitHub! ✅";
+                input.value = "";
+            } else {
+                status.innerText = "Error: Could not save.";
+            }
+
+        } catch (error) {
+            console.error(error);
+            status.innerText = "Error connecting to GitHub.";
+        }
+    }
+
+    // Enter চাপলে সেভ হবে
+    document.getElementById('keyInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') saveToGithub();
+    });
+</script>
+
+</body>
+</html>
