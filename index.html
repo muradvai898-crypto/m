@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Key Manager - Fix</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f4; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #status { margin-top: 15px; font-size: 13px; font-weight: bold; }
+        pre { text-align: left; background: #222; color: #0f0; padding: 10px; border-radius: 8px; margin-top: 20px; font-size: 12px; max-height: 150px; overflow: auto; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="setup">
+    <h3>GitHub Setup</h3>
+    <input type="password" id="tokenInput" placeholder="Paste New GitHub Token...">
+    <button class="btn" onclick="start()">Connect GitHub</button>
+</div>
+
+<div class="card" id="mainUI" style="display:none;">
+    <h3>Key Manager</h3>
+    <input type="text" id="keyInput" placeholder="New Key and Enter...">
+    <button class="btn" onclick="save()">Save to Key.json</button>
+    <div id="status">Status: Ready</div>
+    <pre id="display">Loading...</pre>
+</div>
+
+<script>
+    let GITHUB_TOKEN = "";
+    const CONFIG = { owner: 'muradvai898', repo: 'crypto.github.io', path: 'm/Key.json' };
+
+    function start() {
+        const t = document.getElementById('tokenInput').value.trim();
+        if(t) {
+            GITHUB_TOKEN = t;
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('mainUI').style.display = 'block';
+            load();
+        }
+    }
+
+    async function load() {
+        try {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.path}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            const data = await res.json();
+            const content = JSON.parse(atob(data.content));
+            document.getElementById('display').textContent = JSON.stringify(content, null, 2);
+        } catch (e) { document.getElementById('status').innerText = "Error loading data!"; }
+    }
+
+    async function save() {
+        const input = document.getElementById('keyInput');
+        const status = document.getElementById('status');
+        const val = input.value.trim();
+        if(!val) return;
+
+        status.innerText = "Saving...";
+        status.style.color = "blue";
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.path}`, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            const fileData = await res.json();
+            const sha = fileData.sha;
+            let currentJSON = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
+            
+            currentJSON.keys.push(val);
+            const newContent = JSON.stringify(currentJSON, null, 2);
+
+            const updateRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.path}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: "Update",
+                    content: btoa(unescape(encodeURIComponent(newContent))),
+                    sha: sha
+                })
+            });
+
+            if(updateRes.ok) {
+                status.innerText = "Saved Successfully! ✅";
+                status.style.color = "green";
+                document.getElementById('display').textContent = newContent;
+                input.value = "";
+            } else {
+                const err = await updateRes.json();
+                status.innerText = "Error: " + err.message;
+                status.style.color = "red";
+            }
+        } catch (e) { status.innerText = "Connection Error!"; status.style.color = "red"; }
+    }
+</script>
+</body>
+</html>
