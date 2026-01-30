@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub JSON Auto-Save</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f7f6; margin: 0; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 10px; box-sizing: border-box; font-size: 16px; outline: none; }
+        input:focus { border-color: #007bff; }
+        .btn { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        #status { margin-top: 15px; font-size: 14px; font-weight: bold; min-height: 20px; }
+        pre { text-align: left; background: #282c34; color: #61dafb; padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 13px; max-height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3 id="title">GitHub Key Manager</h3>
+    <div id="setupArea">
+        <input type="password" id="ghToken" placeholder="নতুন GitHub Token টি এখানে দিন">
+        <button class="btn" onclick="connect()">Connect</button>
+    </div>
+
+    <div id="mainUI" style="display:none;">
+        <input type="text" id="keyInput" placeholder="Enter key and press Enter...">
+        <button class="btn" onclick="saveKey()">Save to Key.json</button>
+        <div id="status">Status: Ready ✅</div>
+        <pre id="display">JSON content will load here...</pre>
+    </div>
+</div>
+
+<script>
+    let TOKEN = "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";
+    const OWNER = 'muradvai898';
+    const REPO = 'crypto.github.io';
+    const PATH = 'm/Key.json'; // আপনার স্ক্রিনশট অনুযায়ী পাথ
+
+    const setupArea = document.getElementById('setupArea');
+    const mainUI = document.getElementById('mainUI');
+    const status = document.getElementById('status');
+    const display = document.getElementById('display');
+
+    function connect() {
+        const t = document.getElementById('ghToken').value.trim();
+        if(t) {
+            TOKEN = t;
+            setupArea.style.display = 'none';
+            mainUI.style.display = 'block';
+            loadData();
+        } else { alert("টোকেন দিন ভাই!"); }
+    }
+
+    async function loadData() {
+        try {
+            const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`, {
+                headers: { 'Authorization': `token ${TOKEN}` }
+            });
+            const data = await res.json();
+            const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+            display.textContent = JSON.stringify(content, null, 2);
+        } catch (e) { status.innerText = "Error loading data!"; }
+    }
+
+    async function saveKey() {
+        const input = document.getElementById('keyInput');
+        const val = input.value.trim();
+        if(!val) return;
+
+        status.innerText = "Saving...";
+        status.style.color = "blue";
+
+        try {
+            // ১. লেটেস্ট SHA এবং ডাটা গেট করা
+            const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`, {
+                headers: { 'Authorization': `token ${TOKEN}` }
+            });
+            const fileData = await res.json();
+            const sha = fileData.sha;
+            let currentJSON = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
+
+            // ২. নতুন কি যোগ করা
+            if(!currentJSON.keys) currentJSON.keys = [];
+            currentJSON.keys.push(val);
+            const newContent = JSON.stringify(currentJSON, null, 2);
+
+            // ৩. আপডেট পুশ করা
+            const updateRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: "Key added via Web UI",
+                    content: btoa(unescape(encodeURIComponent(newContent))),
+                    sha: sha
+                })
+            });
+
+            if(updateRes.ok) {
+                status.innerText = "Saved Successfully! ✅";
+                status.style.color = "green";
+                display.textContent = newContent;
+                input.value = "";
+            } else {
+                status.innerText = "Error! Check permissions.";
+                status.style.color = "red";
+            }
+        } catch (e) {
+            status.innerText = "Connection Error!";
+            status.style.color = "red";
+        }
+    }
+
+    document.getElementById('keyInput').addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') saveKey();
+    });
+</script>
+
+</body>
+</html>
